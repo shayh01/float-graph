@@ -255,22 +255,33 @@ function viewPerson(name){return{view:'person',render:function(){
   person.expertises.forEach(function(eName){var ed=EXPERT_DATA[eName];if(!ed)return;ed.clusters.forEach(function(cl){cl.pe.forEach(function(e){if(e.c>allMx)allMx=e.c;});cl.sc.forEach(function(e){if(e.c>allMx)allMx=e.c;});});});
   person.industries.forEach(function(e){var ic=INDUSTRY_CLIENTS[e]?INDUSTRY_CLIENTS[e].length:2;if(ic>allMx)allMx=ic;});
 
-  // Build industry -> related expertise + sector children via shared clients
+  // Build industry -> related expertise + sector children via shared client database
   var indItems=person.industries.map(function(indName){
     var indClients=(INDUSTRY_CLIENTS[indName]||[]).map(function(c){return c.n;});
     var children=[];var seen={};
     person.expertises.forEach(function(eName){
       var ed=EXPERT_DATA[eName];if(!ed)return;
       ed.clusters.forEach(function(cl){
-        var clHasInd=cl.sc.some(function(sc){return(SECTOR_CLIENTS[sc.n]||[]).some(function(c){return indClients.indexOf(c)>=0;});});
-        if(!clHasInd)return;
-        cl.pe.forEach(function(e){if(!seen[e.n]){seen[e.n]=true;children.push({n:e.n,c:e.c,g:'projectExp',en:eName});}});
-        cl.sc.forEach(function(sc){if(!seen[sc.n]&&(SECTOR_CLIENTS[sc.n]||[]).some(function(c){return indClients.indexOf(c)>=0;})){seen[sc.n]=true;children.push({n:sc.n,c:sc.c,g:'sector',en:eName});}});
+        // Match cluster to industry via sectors OR via pe project→client→industry
+        var clMatchesSector=cl.sc.some(function(sc){return(SECTOR_CLIENTS[sc.n]||[]).some(function(c){return indClients.indexOf(c)>=0;});});
+        var clMatchesProject=cl.pe.some(function(pe){return(PE_PROJECTS[pe.n]||[]).some(function(proj){return Object.keys(CLIENT_PROJECTS).some(function(cn){return indClients.indexOf(cn)>=0&&(CLIENT_PROJECTS[cn]||[]).indexOf(proj)>=0;});});});
+        if(!clMatchesSector&&!clMatchesProject)return;
+        // Only include pe items whose projects actually touched this industry
+        cl.pe.forEach(function(e){
+          if(seen[e.n])return;
+          var peHasInd=(PE_PROJECTS[e.n]||[]).some(function(proj){return Object.keys(CLIENT_PROJECTS).some(function(cn){return indClients.indexOf(cn)>=0&&(CLIENT_PROJECTS[cn]||[]).indexOf(proj)>=0;});});
+          if(peHasInd){seen[e.n]=true;children.push({n:e.n,c:e.c,g:'projectExp',en:eName});}
+        });
+        // Only include sectors that overlap with this industry's clients
+        cl.sc.forEach(function(sc){
+          if(seen[sc.n])return;
+          if((SECTOR_CLIENTS[sc.n]||[]).some(function(c){return indClients.indexOf(c)>=0;})){seen[sc.n]=true;children.push({n:sc.n,c:sc.c,g:'sector',en:eName});}
+        });
       });
     });
     var ic=INDUSTRY_CLIENTS[indName]?INDUSTRY_CLIENTS[indName].length:2;
     return{name:indName,children:children,ic:ic};
-  });
+  }).filter(function(ind){return ind.children.length>0;});
 
   var sc2=Math.min(W,H)*0.23;
   var numInd=indItems.length;
