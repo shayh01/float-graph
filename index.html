@@ -30,11 +30,6 @@ html,body{height:100%;background:#121214;color:#e0dfd8;font-family:'DM Sans',sys
 .rl{font-size:11px;color:#6b6a63;margin-top:2px}
 .br{height:2px;border-radius:1px;margin-top:4px}
 .sep{font-size:10px;font-weight:500;color:#5a5952;padding:12px 0 5px;text-transform:uppercase;letter-spacing:0.8px}
-.sf{display:flex;align-items:center;gap:10px;padding:10px 16px;border:1px solid rgba(255,255,255,0.06);border-radius:10px;margin-top:12px;background:rgba(255,255,255,0.02);transition:border-color .2s}
-.sf:focus-within{border-color:rgba(255,255,255,0.12)}
-.sf span{color:#5a5952;font-size:13px}
-.sf input{border:none;background:transparent;outline:none;flex:1;font-size:13px;color:#c2c0b6;font-family:inherit}
-.sf input::placeholder{color:#5a5952}
 @media(max-width:700px){.sb{display:none}.wrap{border-radius:10px}}
 </style>
 </head>
@@ -46,12 +41,11 @@ html,body{height:100%;background:#121214;color:#e0dfd8;font-family:'DM Sans',sys
 <div class="main"><canvas id="c"></canvas></div>
 <div class="sb"><h3 id="st"></h3><p class="sub" id="ss"></p><div id="sl"></div></div>
 </div>
-<div class="sf"><span>Search</span><input placeholder="e.g. Emma or SaaS" oninput="App.filter(this.value)"></div>
 </div>
 <script>
 var App=(function(){
 var cv=document.getElementById('c'),ctx=cv.getContext('2d');
-var W,H,dpr,nodes=[],displayNodes=[],hovered=-1,search='',clusterZones=[],topLinks=[];
+var W,H,dpr,nodes=[],displayNodes=[],hovered=-1,clusterZones=[],topLinks=[];
 var animFrame=null,animStart=0,ANIM_DUR=420,F='DM Sans';
 var hoverAnimFrame=null,hoverStart=0;
 var P={
@@ -151,7 +145,6 @@ var dn=displayNodes.length?displayNodes:nodes.map(function(n){return{x:n.x,y:n.y
 topLinks.forEach(function(lk){
   var ai=-1,bi=-1;for(var i=0;i<nodes.length;i++){if(nodes[i].name===lk.from)ai=i;if(nodes[i].name===lk.to)bi=i;}
   if(ai<0||bi<0||!dn[ai]||!dn[bi])return;
-  if(search&&nodes[ai].name.toLowerCase().indexOf(search)<0&&nodes[bi].name.toLowerCase().indexOf(search)<0)return;
   ctx.globalAlpha=Math.min(dn[ai].opacity,dn[bi].opacity);
   ctx.beginPath();ctx.moveTo(dn[ai].x,dn[ai].y);ctx.lineTo(dn[bi].x,dn[bi].y);ctx.strokeStyle=sharedC;ctx.lineWidth=Math.min(lk.weight*0.8,3);ctx.stroke();ctx.globalAlpha=1;
 });
@@ -166,17 +159,15 @@ clusterZones.forEach(function(zone){
   var pad=4,rx=mnx-pad,ry=mny-pad,rw=mxx-mnx+pad*2,rh=mxy-mny+pad*2,cr=12;
   ctx.beginPath();ctx.moveTo(rx+cr,ry);ctx.arcTo(rx+rw,ry,rx+rw,ry+rh,cr);ctx.arcTo(rx+rw,ry+rh,rx,ry+rh,cr);ctx.arcTo(rx,ry+rh,rx,ry,cr);ctx.arcTo(rx,ry,rx+rw,ry,cr);ctx.closePath();
   ctx.strokeStyle=clStroke;ctx.lineWidth=0.5;ctx.stroke();
-  if(zone.label&&!search){ctx.textAlign='center';ctx.textBaseline='top';ctx.font='400 10px "'+F+'",system-ui,sans-serif';ctx.fillStyle=tS;ctx.globalAlpha=avgOp*0.5;ctx.fillText(zone.label,(mnx+mxx)/2,mxy+pad+3);}
+  if(zone.label){ctx.textAlign='center';ctx.textBaseline='top';ctx.font='400 10px "'+F+'",system-ui,sans-serif';ctx.fillStyle=tS;ctx.globalAlpha=avgOp*0.5;ctx.fillText(zone.label,(mnx+mxx)/2,mxy+pad+3);}
   ctx.globalAlpha=1;
 });
 var hasCenter=nodes.length>0&&nodes[0].group==='center';
 if(hasCenter&&dn[0]){
-  for(var i=1;i<nodes.length;i++){if(!dn[i])continue;if(nodes[i]._parentIdx!==undefined)continue;if(search&&nodes[i].name.toLowerCase().indexOf(search)<0)continue;ctx.globalAlpha=dn[i].opacity*0.4;ctx.beginPath();ctx.moveTo(dn[0].x,dn[0].y);ctx.lineTo(dn[i].x,dn[i].y);ctx.strokeStyle=lnC;ctx.lineWidth=0.5;ctx.stroke();}ctx.globalAlpha=1;
+  for(var i=1;i<nodes.length;i++){if(!dn[i])continue;if(nodes[i]._parentIdx!==undefined)continue;ctx.globalAlpha=dn[i].opacity*0.4;ctx.beginPath();ctx.moveTo(dn[0].x,dn[0].y);ctx.lineTo(dn[i].x,dn[i].y);ctx.strokeStyle=lnC;ctx.lineWidth=0.5;ctx.stroke();}ctx.globalAlpha=1;
 }
 for(var i=0;i<nodes.length;i++){
   var n=nodes[i];if(!dn[i])continue;
-  if(hasCenter&&i>0&&search&&n.name.toLowerCase().indexOf(search)<0)continue;
-  if(!hasCenter&&search&&n.name.toLowerCase().indexOf(search)<0)continue;
   var d=dn[i],isH=hovered===i,p=P[n.group]||P.center;
   if(n._isContainer){
     // Faded parent bubble — draw behind its children
@@ -300,7 +291,7 @@ function viewPerson(name){return{view:'person',render:function(){
     var indNode=nodes[1+ii];var idxList=[1+ii];
     ind.children.forEach(function(child,ci){
       var childAng=(ci/Math.max(ind.children.length,1))*Math.PI*2-Math.PI/2;
-      var r=16+(child.c/allMx)*32;
+      var r=22+(child.c/allMx)*42;
       var childDist=Math.max(0,(indNode.r-r-8)*0.55);
       var cidx=nodes.length;
       nodes.push({name:child.n,count:child.c,group:child.g,x:indNode.x+Math.cos(childAng)*childDist,y:indNode.y+Math.sin(childAng)*childDist,r:r,clickable:true,_action:(function(cn,cg,en_){return cg==='projectExp'?function(){go(viewPE(cn,en_,name));}:function(){go(viewSector(cn,en_,name));};})(child.n,child.g,child.en),_parentIdx:1+ii});
@@ -335,7 +326,7 @@ function viewIndustry(name,pn){return{view:'industry',render:function(){
 function viewClientProj(cn,fn,pn){return{view:'cp',render:function(){
   var projects=CLIENT_PROJECTS[cn]||[];var cx=W*0.43,cy=H*0.5;
   nodes=[{name:cn,count:null,group:'center',x:cx,y:cy,r:44,clickable:false}];
-  projects.forEach(function(pr,i){var a=(i/Math.max(projects.length,1))*Math.PI*2-Math.PI/2;nodes.push({name:pr,count:null,group:'project',x:cx+Math.cos(a)*90,y:cy+Math.sin(a)*90,r:32,clickable:false});});physics(250,true);
+  projects.forEach(function(pr,i){var a=(i/Math.max(projects.length,1))*Math.PI*2-Math.PI/2;nodes.push({name:pr,count:null,group:'project',x:cx+Math.cos(a)*90,y:cy+Math.sin(a)*90,r:44,clickable:false});});physics(250,true);
   var btns=[{label:'Team',action:function(){go(viewTop());}}];if(pn)btns.push({label:pn,action:function(){go(viewPerson(pn));}});if(fn)btns.push({label:fn,action:function(){if(INDUSTRY_CLIENTS[fn])go(viewIndustry(fn,pn));else go(viewSector(fn,null,pn));}});
   setHdr(btns,projects.length+' project'+(projects.length!==1?'s':''));legend([[P.project.b,'Project']]);
   sbFlat(cn,projects.length+' project'+(projects.length!==1?'s':''),projects.map(function(pr){return{n:pr,c:1,g:'project'};}),{hideCount:true});
@@ -344,7 +335,7 @@ function viewClientProj(cn,fn,pn){return{view:'cp',render:function(){
 function viewPE(name,en,pn){return{view:'pe',render:function(){
   var projects=PE_PROJECTS[name]||[];var cx=W*0.43,cy=H*0.5;
   nodes=[{name:name,count:null,group:'center',x:cx,y:cy,r:44,clickable:false}];
-  projects.forEach(function(pr,i){var a=(i/Math.max(projects.length,1))*Math.PI*2-Math.PI/2;nodes.push({name:pr,count:null,group:'project',x:cx+Math.cos(a)*90,y:cy+Math.sin(a)*90,r:32,clickable:false});});physics(250,true);
+  projects.forEach(function(pr,i){var a=(i/Math.max(projects.length,1))*Math.PI*2-Math.PI/2;nodes.push({name:pr,count:null,group:'project',x:cx+Math.cos(a)*90,y:cy+Math.sin(a)*90,r:44,clickable:false});});physics(250,true);
   setHdr([{label:'Team',action:function(){go(viewTop());}},{label:pn,action:function(){go(viewPerson(pn));}}],projects.length+' project'+(projects.length!==1?'s':''));legend([[P.project.b,'Project']]);
   sbFlat(name,projects.length+' project'+(projects.length!==1?'s':''),projects.map(function(pr){return{n:pr,c:1,g:'project'};}),{hideCount:true});
 }};}
@@ -370,7 +361,7 @@ cv.addEventListener('pointerdown',function(e){var r=cv.getBoundingClientRect();v
 cv.addEventListener('pointerleave',function(){hovered=-1;if(!animFrame&&!hoverAnimFrame)draw();});
 resize();go(viewTop());
 window.addEventListener('resize',function(){resize();NAV.render();startAnim();});
-return{filter:function(v){search=v.toLowerCase();if(!animFrame)draw();}};
+return{};
 })();
 </script>
 </body>
