@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Team experience graph</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#121214;color:#e0dfd8;font-family:'DM Sans',system-ui,sans-serif}
+.shell{max-width:1920px;margin:0 auto;padding:24px 20px 16px;min-height:100vh;display:flex;flex-direction:column}
+.hdr{display:flex;align-items:center;gap:8px;padding:0 0 8px;font-size:13px;color:#8a8980;flex-wrap:wrap;min-height:32px}
+.hdr button{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:500;color:#c2c0b6;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:5px 14px;cursor:pointer;font-family:inherit;transition:background .2s,border-color .2s}
+.hdr button:hover{background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.14)}
+.leg{display:flex;gap:16px;font-size:12px;color:#8a8980;padding:2px 0 10px;flex-wrap:wrap}
+.ld{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle}
+.wrap{display:flex;flex:1;border-radius:14px;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.05);overflow:hidden;min-height:0}
+.main{flex:1;min-width:0;position:relative}
+.main canvas{display:block;width:100%;height:100%;min-height:1040px}
+.sb{width:220px;flex-shrink:0;padding:16px 0 16px 16px;border-left:1px solid rgba(255,255,255,0.06);overflow-y:auto;max-height:1120px}
+.sb h3{font-size:15px;font-weight:500;margin:0 0 2px;color:#e0dfd8}
+.sb .sub{font-size:12px;color:#8a8980;margin:0 0 12px}
+.sb ul{list-style:none}
+.sb li{padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:13px}
+.sb li.clk{cursor:pointer}
+.sb li.clk:hover span.nm{color:#85B7EB}
+.row{display:flex;justify-content:space-between}
+.nm{color:#c2c0b6;transition:color .15s}
+.ct{color:#6b6a63;font-size:12px}
+.rl{font-size:11px;color:#6b6a63;margin-top:2px}
+.br{height:2px;border-radius:1px;margin-top:4px}
+.sep{font-size:10px;font-weight:500;color:#5a5952;padding:12px 0 5px;text-transform:uppercase;letter-spacing:0.8px}
+.sf{display:flex;align-items:center;gap:10px;padding:10px 16px;border:1px solid rgba(255,255,255,0.06);border-radius:10px;margin-top:12px;background:rgba(255,255,255,0.02);transition:border-color .2s}
+.sf:focus-within{border-color:rgba(255,255,255,0.12)}
+.sf span{color:#5a5952;font-size:13px}
+.sf input{border:none;background:transparent;outline:none;flex:1;font-size:13px;color:#c2c0b6;font-family:inherit}
+.sf input::placeholder{color:#5a5952}
+@media(max-width:700px){.sb{display:none}.wrap{border-radius:10px}}
+</style>
+</head>
+<body>
+<div class="shell">
+<div class="hdr" id="hdr"><span id="crumb"></span></div>
+<div class="leg" id="leg"></div>
+<div class="wrap">
+<div class="main"><canvas id="c"></canvas></div>
+<div class="sb"><h3 id="st"></h3><p class="sub" id="ss"></p><div id="sl"></div></div>
+</div>
+<div class="sf"><span>Search</span><input placeholder="e.g. Emma or SaaS" oninput="App.filter(this.value)"></div>
+</div>
+<script>
+var App=(function(){
+var cv=document.getElementById('c'),ctx=cv.getContext('2d');
+var W,H,dpr,nodes=[],displayNodes=[],hovered=-1,search='',clusterZones=[],topLinks=[];
+var animFrame=null,animStart=0,ANIM_DUR=420,F='DM Sans';
+var hoverAnimFrame=null,hoverStart=0;
+var P={
+strategy:{f:'rgba(175,169,236,0.13)',s:'rgba(175,169,236,0.4)',b:'#AFA9EC'},
+design:{f:'rgba(237,147,177,0.13)',s:'rgba(237,147,177,0.4)',b:'#ED93B1'},
+engineering:{f:'rgba(133,183,235,0.13)',s:'rgba(133,183,235,0.4)',b:'#85B7EB'},
+production:{f:'rgba(240,153,123,0.13)',s:'rgba(240,153,123,0.4)',b:'#F0997B'},
+expertise:{f:'rgba(175,169,236,0.13)',s:'rgba(175,169,236,0.4)',b:'#AFA9EC'},
+industry:{f:'rgba(93,202,165,0.13)',s:'rgba(93,202,165,0.4)',b:'#5DCAA5'},
+projectExp:{f:'rgba(240,153,123,0.13)',s:'rgba(240,153,123,0.4)',b:'#F0997B'},
+sector:{f:'rgba(133,183,235,0.13)',s:'rgba(133,183,235,0.4)',b:'#85B7EB'},
+client:{f:'rgba(93,202,165,0.13)',s:'rgba(93,202,165,0.4)',b:'#5DCAA5'},
+project:{f:'rgba(250,199,117,0.13)',s:'rgba(250,199,117,0.4)',b:'#FAC775'},
+center:{f:'rgba(255,255,255,0.06)',s:'rgba(255,255,255,0.18)',b:'#888'}
+};
+var tC='#e0dfd8',tS='#8a8980',lnC='rgba(255,255,255,0.04)',sharedC='rgba(255,255,255,0.14)',clStroke='rgba(255,255,255,0.04)';
+
+var PCLUSTERS=[
+{label:'Tech branding',projects:['Stripe rebrand','Figma positioning','Notion messaging','Vercel identity','Linear brand','Raycast UX'],angle:Math.PI*0.3},
+{label:'Financial services',projects:['Goldman Sachs refresh','Wise rebrand','Monzo positioning','Plaid identity','Revolut identity'],angle:Math.PI*1.1},
+{label:'Automotive',projects:['Tesla design system','Mercedes-Benz digital','Ford app','Audi campaign','BMW visual'],angle:Math.PI*1.7},
+{label:'Health & wellness',projects:['Roche campaign','Babylon Health','Hims & Hers app','Ro platform'],angle:Math.PI*0.7},
+{label:'Retail & DTC',projects:['Allbirds refresh','Warby Parker rebrand','Glossier identity','Away campaign'],angle:Math.PI*1.4}
+];
+
+var PEOPLE=[
+{n:'Emma Chen',role:'Strategist',dept:'strategy',c:14,projects:['Stripe rebrand','Figma positioning','Notion messaging','Revolut identity','Roche campaign'],expertises:['Brand strategy','Content strategy'],industries:['Technology','Financial services','Healthcare']},
+{n:'James Silva',role:'Senior strategist',dept:'strategy',c:11,projects:['Goldman Sachs refresh','Wise rebrand','Monzo positioning','Plaid identity'],expertises:['Brand strategy'],industries:['Financial services']},
+{n:'Sophia Laurent',role:'Brand strategist',dept:'strategy',c:10,projects:['Revolut identity','Wise rebrand','Roche campaign','Babylon Health'],expertises:['Brand strategy'],industries:['Financial services','Healthcare']},
+{n:'Liam Patel',role:'Design lead',dept:'design',c:12,projects:['Stripe rebrand','Tesla design system','Mercedes-Benz digital','Ford app','Figma positioning'],expertises:['Brand strategy','Visual identity'],industries:['Technology','Automotive']},
+{n:'Noah Kim',role:'Brand designer',dept:'design',c:9,projects:['Notion messaging','Vercel identity','Linear brand','Allbirds refresh'],expertises:['Visual identity'],industries:['Technology','Retail']},
+{n:'Chloe Rossi',role:'Senior designer',dept:'design',c:11,projects:['Warby Parker rebrand','Glossier identity','Allbirds refresh','Away campaign','Tesla design system'],expertises:['Visual identity'],industries:['Retail','Automotive']},
+{n:'Ben Singh',role:'Design director',dept:'design',c:8,projects:['Mercedes-Benz digital','Audi campaign','BMW visual','Ford app'],expertises:['Visual identity','Motion design'],industries:['Automotive']},
+{n:'Alex Brown',role:'Product designer',dept:'engineering',c:11,projects:['Stripe rebrand','Figma positioning','Vercel identity','Linear brand','Raycast UX'],expertises:['Digital product'],industries:['Technology']},
+{n:'Mia Tanaka',role:'UX designer',dept:'engineering',c:10,projects:['Notion messaging','Hims & Hers app','Ro platform','Figma positioning'],expertises:['Digital product','UX design'],industries:['Technology','Healthcare']},
+{n:'Ethan Johnson',role:'Frontend lead',dept:'engineering',c:9,projects:['Tesla design system','Stripe rebrand','Vercel identity'],expertises:['Digital product'],industries:['Technology','Automotive']},
+{n:'Sam Taylor',role:'UX researcher',dept:'engineering',c:7,projects:['Goldman Sachs refresh','Monzo positioning','Revolut identity'],expertises:['UX design'],industries:['Financial services']},
+{n:'Tom Berg',role:'Motion designer',dept:'production',c:7,projects:['Mercedes-Benz digital','Audi campaign','Tesla design system','BMW visual'],expertises:['Motion design'],industries:['Automotive']},
+{n:'Iris Patel',role:'Motion designer',dept:'production',c:5,projects:['Stripe rebrand','Figma positioning','Raycast UX'],expertises:['Motion design'],industries:['Technology']},
+{n:'Leo Santos',role:'Project manager',dept:'production',c:6,projects:['Roche campaign','Babylon Health','Hims & Hers app','Ro platform'],expertises:['Service design'],industries:['Healthcare']},
+{n:'Grace Kim',role:'Producer',dept:'production',c:5,projects:['Allbirds refresh','Warby Parker rebrand','Glossier identity'],expertises:['Content strategy'],industries:['Retail']}
+];
+
+var EXPERT_DATA={'Brand strategy':{clusters:[{pe:[{n:'Brand positioning',c:12},{n:'Naming',c:8}],sc:[{n:'SaaS',c:9},{n:'Fintech',c:7}]},{pe:[{n:'Brand architecture',c:6},{n:'Verbal identity',c:5}],sc:[{n:'Pharma',c:5}]}]},'Digital product':{clusters:[{pe:[{n:'Product design',c:10},{n:'Design systems',c:7}],sc:[{n:'Enterprise SaaS',c:8}]},{pe:[{n:'Prototyping',c:6},{n:'User research',c:4}],sc:[{n:'Consumer tech',c:6},{n:'Mobility',c:5}]}]},'Visual identity':{clusters:[{pe:[{n:'Logo design',c:11},{n:'Brand guidelines',c:8}],sc:[{n:'Startups',c:7},{n:'CPG',c:5}]},{pe:[{n:'Illustration',c:4},{n:'Photo direction',c:3}],sc:[{n:'Hospitality',c:4}]}]},'UX design':{clusters:[{pe:[{n:'Research',c:9},{n:'Wireframing',c:7},{n:'Usability testing',c:5}],sc:[{n:'Technology',c:8},{n:'Finance',c:4}]}]},'Motion design':{clusters:[{pe:[{n:'UI animation',c:5},{n:'Micro-interactions',c:3}],sc:[{n:'Tech',c:3}]},{pe:[{n:'Brand films',c:4}],sc:[{n:'Automotive',c:5}]}]},'Content strategy':{clusters:[{pe:[{n:'Messaging',c:4},{n:'Content audit',c:3},{n:'Editorial',c:2}],sc:[{n:'Retail',c:4},{n:'SaaS',c:2}]}]},'Service design':{clusters:[{pe:[{n:'Journey mapping',c:4},{n:'Blueprinting',c:3}],sc:[{n:'Healthcare',c:3},{n:'Government',c:2}]}]}};
+var INDUSTRY_CLIENTS={'Technology':[{n:'Stripe',c:14},{n:'Figma',c:11},{n:'Notion',c:8},{n:'Vercel',c:5},{n:'Linear',c:3},{n:'Raycast',c:2}],'Financial services':[{n:'Goldman Sachs',c:12},{n:'Revolut',c:9},{n:'Wise',c:7},{n:'Monzo',c:4},{n:'Plaid',c:2}],'Healthcare':[{n:'Roche',c:6},{n:'Babylon Health',c:5},{n:'Hims & Hers',c:4},{n:'Ro',c:3}],'Automotive':[{n:'Tesla',c:19},{n:'Mercedes-Benz',c:17},{n:'Ford',c:3},{n:'Audi',c:3},{n:'Volvo',c:1},{n:'BMW',c:1}],'Retail':[{n:'Allbirds',c:7},{n:'Warby Parker',c:5},{n:'Glossier',c:4},{n:'Away',c:2}]};
+var CLIENT_PROJECTS={'Stripe':['Stripe rebrand'],'Figma':['Figma positioning'],'Notion':['Notion messaging'],'Vercel':['Vercel identity'],'Linear':['Linear brand'],'Raycast':['Raycast UX'],'Goldman Sachs':['Goldman Sachs refresh'],'Revolut':['Revolut identity'],'Wise':['Wise rebrand'],'Monzo':['Monzo positioning'],'Plaid':['Plaid identity'],'Roche':['Roche campaign'],'Babylon Health':['Babylon Health'],'Hims & Hers':['Hims & Hers app'],'Ro':['Ro platform'],'Tesla':['Tesla design system'],'Mercedes-Benz':['Mercedes-Benz digital'],'Ford':['Ford app'],'Audi':['Audi campaign'],'Volvo':[],'BMW':['BMW visual'],'Allbirds':['Allbirds refresh'],'Warby Parker':['Warby Parker rebrand'],'Glossier':['Glossier identity'],'Away':['Away campaign']};
+var PE_PROJECTS={'Brand positioning':['Stripe rebrand','Figma positioning','Monzo positioning','Plaid identity'],'Naming':['Vercel identity','Linear brand','Raycast UX'],'Brand architecture':['Goldman Sachs refresh','Wise rebrand'],'Verbal identity':['Notion messaging','Revolut identity'],'Product design':['Stripe rebrand','Figma positioning','Tesla design system'],'Design systems':['Tesla design system','Vercel identity'],'Prototyping':['Hims & Hers app','Ro platform','Linear brand'],'User research':['Notion messaging','Figma positioning'],'Logo design':['Warby Parker rebrand','Glossier identity','Allbirds refresh','Away campaign'],'Brand guidelines':['Mercedes-Benz digital','Ford app','Audi campaign'],'Illustration':['Allbirds refresh','Glossier identity'],'Photo direction':['Mercedes-Benz digital','BMW visual'],'Research':['Goldman Sachs refresh','Monzo positioning','Revolut identity'],'Wireframing':['Goldman Sachs refresh','Hims & Hers app'],'Usability testing':['Ro platform','Notion messaging'],'UI animation':['Mercedes-Benz digital','Tesla design system'],'Brand films':['Audi campaign','BMW visual'],'Micro-interactions':['Stripe rebrand','Figma positioning'],'Messaging':['Notion messaging','Allbirds refresh'],'Content audit':['Warby Parker rebrand'],'Editorial':['Glossier identity'],'Journey mapping':['Roche campaign','Babylon Health'],'Blueprinting':['Hims & Hers app','Ro platform']};
+var SECTOR_CLIENTS={'SaaS':['Stripe','Figma','Notion','Linear','Vercel'],'Fintech':['Revolut','Wise','Monzo','Plaid'],'Pharma':['Roche'],'Enterprise SaaS':['Stripe','Figma','Notion'],'Consumer tech':['Raycast','Linear'],'Mobility':['Tesla','Mercedes-Benz'],'Startups':['Vercel','Linear','Raycast'],'CPG':['Allbirds','Glossier'],'Hospitality':['Away'],'Technology':['Stripe','Figma','Notion','Vercel'],'Finance':['Goldman Sachs','Revolut','Monzo'],'Automotive':['Tesla','Mercedes-Benz','Audi','BMW'],'Tech':['Stripe','Figma','Raycast'],'Retail':['Allbirds','Warby Parker','Glossier'],'Healthcare':['Roche','Babylon Health','Hims & Hers','Ro'],'Government':[]};
+
+function cpc(n){return(CLIENT_PROJECTS[n]||[]).length;}
+function resize(){dpr=window.devicePixelRatio||1;var r=cv.parentElement.getBoundingClientRect();W=r.width;H=Math.max(r.height,1040);cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0);}
+function getPCl(p){var best=-1,bi=0;PCLUSTERS.forEach(function(cl,ci){var o=0;p.projects.forEach(function(pr){if(cl.projects.indexOf(pr)>=0)o++;});if(o>best){best=o;bi=ci;}});return bi;}
+
+function physics(iters,hasCenter){
+for(var it=0;it<iters;it++){
+  var s=hasCenter?1:0;
+  for(var i=s;i<nodes.length;i++){
+    for(var j=i+1;j<nodes.length;j++){
+      var a=nodes[i],b=nodes[j],dx=b.x-a.x,dy=b.y-a.y,dist=Math.sqrt(dx*dx+dy*dy)||1;
+      var gap=(a.cluster!==undefined&&b.cluster!==undefined&&a.cluster===b.cluster)?5:10;
+      var mn=a.r+b.r+gap;
+      if(dist<mn){var f=(mn-dist)*0.28;a.x-=(dx/dist)*f;a.y-=(dy/dist)*f;b.x+=(dx/dist)*f;b.y+=(dy/dist)*f;}
+    }
+    if(hasCenter){
+      var nd=nodes[i],ctr=nodes[0],dx2=nd.x-ctr.x,dy2=nd.y-ctr.y,d2=Math.sqrt(dx2*dx2+dy2*dy2)||1;
+      var mn2=nd.r+ctr.r+12;
+      if(d2<mn2){nd.x+=(dx2/d2)*(mn2-d2)*0.5;nd.y+=(dy2/d2)*(mn2-d2)*0.5;}
+      var ideal=ctr.r+nd.r+45+nd.r*0.25;
+      nd.x-=(dx2/d2)*(d2-ideal)*0.005;nd.y-=(dy2/d2)*(d2-ideal)*0.005;
+    }
+    if(nodes[i].cluster!==undefined&&clusterZones[nodes[i].cluster]){
+      var z=clusterZones[nodes[i].cluster],dxz=nodes[i].x-z.cx,dyz=nodes[i].y-z.cy,dz=Math.sqrt(dxz*dxz+dyz*dyz)||1;
+      nodes[i].x-=(dxz/dz)*dz*0.015;nodes[i].y-=(dyz/dz)*dz*0.015;
+    }
+    var mg=nodes[i].r+5;nodes[i].x=Math.max(mg,Math.min(W*0.86-mg,nodes[i].x));nodes[i].y=Math.max(mg,Math.min(H-mg,nodes[i].y));
+  }
+}}
+
+function ease(t){return t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;}
+function startAnim(){
+  var prev=displayNodes.length?displayNodes.map(function(n){return{x:n.x,y:n.y,r:n.r,opacity:n.opacity||1};}):null;
+  displayNodes=nodes.map(function(n,i){
+    var p=prev&&prev[i]?prev[i]:{x:W*0.43,y:H*0.5,r:0,opacity:0};
+    return{sx:p.x,sy:p.y,sr:p.r,so:p.opacity,tx:n.x,ty:n.y,tr:n.r,to:1,x:p.x,y:p.y,r:p.r,opacity:p.opacity};
+  });animStart=performance.now();if(!animFrame)tick();
+}
+function tick(){
+  var t=Math.min((performance.now()-animStart)/ANIM_DUR,1),e=ease(t);
+  for(var i=0;i<displayNodes.length;i++){var d=displayNodes[i];d.x=d.sx+(d.tx-d.sx)*e;d.y=d.sy+(d.ty-d.sy)*e;d.r=d.sr+(d.tr-d.sr)*e;d.opacity=d.so+(d.to-d.so)*e;}
+  draw();if(t<1)animFrame=requestAnimationFrame(tick);
+  else{animFrame=null;displayNodes=nodes.map(function(n){return{x:n.x,y:n.y,r:n.r,opacity:1};});}
+}
+
+function draw(){
+ctx.clearRect(0,0,W,H);
+var dn=displayNodes.length?displayNodes:nodes.map(function(n){return{x:n.x,y:n.y,r:n.r,opacity:1};});
+topLinks.forEach(function(lk){
+  var ai=-1,bi=-1;for(var i=0;i<nodes.length;i++){if(nodes[i].name===lk.from)ai=i;if(nodes[i].name===lk.to)bi=i;}
+  if(ai<0||bi<0||!dn[ai]||!dn[bi])return;
+  if(search&&nodes[ai].name.toLowerCase().indexOf(search)<0&&nodes[bi].name.toLowerCase().indexOf(search)<0)return;
+  ctx.globalAlpha=Math.min(dn[ai].opacity,dn[bi].opacity);
+  ctx.beginPath();ctx.moveTo(dn[ai].x,dn[ai].y);ctx.lineTo(dn[bi].x,dn[bi].y);ctx.strokeStyle=sharedC;ctx.lineWidth=Math.min(lk.weight*0.8,3);ctx.stroke();ctx.globalAlpha=1;
+});
+clusterZones.forEach(function(zone){
+  if(!zone.indices||zone.indices.length<2)return;
+  var mnx=9999,mny=9999,mxx=-9999,mxy=-9999;
+  zone.indices.forEach(function(idx){if(!dn[idx])return;var d=dn[idx];mnx=Math.min(mnx,d.x-d.r-8);mny=Math.min(mny,d.y-d.r-8);mxx=Math.max(mxx,d.x+d.r+8);mxy=Math.max(mxy,d.y+d.r+8);});
+  if(mnx>mxx)return;
+  var avgOp=0;zone.indices.forEach(function(idx){avgOp+=(dn[idx]?dn[idx].opacity:1);});avgOp/=zone.indices.length;
+  ctx.globalAlpha=avgOp;
+  var pad=4,rx=mnx-pad,ry=mny-pad,rw=mxx-mnx+pad*2,rh=mxy-mny+pad*2,cr=12;
+  ctx.beginPath();ctx.moveTo(rx+cr,ry);ctx.arcTo(rx+rw,ry,rx+rw,ry+rh,cr);ctx.arcTo(rx+rw,ry+rh,rx,ry+rh,cr);ctx.arcTo(rx,ry+rh,rx,ry,cr);ctx.arcTo(rx,ry,rx+rw,ry,cr);ctx.closePath();
+  ctx.strokeStyle=clStroke;ctx.lineWidth=0.5;ctx.stroke();
+  if(zone.label&&!search){ctx.textAlign='center';ctx.textBaseline='top';ctx.font='400 10px "'+F+'",system-ui,sans-serif';ctx.fillStyle=tS;ctx.globalAlpha=avgOp*0.5;ctx.fillText(zone.label,(mnx+mxx)/2,mxy+pad+3);}
+  ctx.globalAlpha=1;
+});
+var hasCenter=nodes.length>0&&nodes[0].group==='center';
+if(hasCenter&&dn[0]){
+  for(var i=1;i<nodes.length;i++){if(!dn[i])continue;if(search&&nodes[i].name.toLowerCase().indexOf(search)<0)continue;ctx.globalAlpha=dn[i].opacity*0.4;ctx.beginPath();ctx.moveTo(dn[0].x,dn[0].y);ctx.lineTo(dn[i].x,dn[i].y);ctx.strokeStyle=lnC;ctx.lineWidth=0.5;ctx.stroke();}ctx.globalAlpha=1;
+}
+for(var i=0;i<nodes.length;i++){
+  var n=nodes[i];if(!dn[i])continue;
+  if(hasCenter&&i>0&&search&&n.name.toLowerCase().indexOf(search)<0)continue;
+  if(!hasCenter&&search&&n.name.toLowerCase().indexOf(search)<0)continue;
+  var d=dn[i],isH=hovered===i,p=P[n.group]||P.center;
+  var isHover=isH&&n.group!=='center';
+  var fy=isHover?Math.sin((performance.now()-hoverStart)*0.0025)*5:0;
+  var dy=d.y+fy;
+  ctx.globalAlpha=d.opacity;
+  if(isHover){
+    var pulse=(Math.sin((performance.now()-hoverStart)*0.004)+1)*0.5;
+    ctx.beginPath();ctx.arc(d.x,dy,d.r*(1.38+pulse*0.1),0,Math.PI*2);
+    ctx.strokeStyle=p.b;ctx.lineWidth=1;ctx.globalAlpha=d.opacity*0.15*pulse;ctx.stroke();
+    ctx.beginPath();ctx.arc(d.x,dy,d.r*1.2,0,Math.PI*2);
+    ctx.strokeStyle=p.b;ctx.lineWidth=0.8;ctx.globalAlpha=d.opacity*0.22;ctx.stroke();
+    ctx.globalAlpha=d.opacity;
+    ctx.shadowBlur=24;ctx.shadowColor=p.b;
+  }
+  ctx.beginPath();ctx.arc(d.x,dy,d.r*(isHover?1.08:1),0,Math.PI*2);ctx.fillStyle=p.f;ctx.fill();ctx.strokeStyle=p.s;ctx.lineWidth=isHover?1.8:0.5;ctx.stroke();
+  ctx.shadowBlur=0;
+  var fs=d.r>48?14:d.r>26?12:11;ctx.textAlign='center';ctx.textBaseline='middle';
+  var lbl=n.name;if(lbl.length>18&&d.r<40)lbl=lbl.substring(0,15)+'...';
+  if(n._isPerson){
+    ctx.font='500 14px "'+F+'",system-ui,sans-serif';ctx.fillStyle=tC;ctx.fillText(lbl,d.x,dy-6);
+    ctx.fillStyle=tS;ctx.font='400 11px "'+F+'",system-ui,sans-serif';ctx.fillText('Experience',d.x,dy+12);
+  } else if(n.group==='project'){
+    ctx.font='500 '+fs+'px "'+F+'",system-ui,sans-serif';ctx.fillStyle=tC;ctx.fillText(lbl,d.x,dy);
+  } else {
+    ctx.font='500 '+fs+'px "'+F+'",system-ui,sans-serif';ctx.fillStyle=tC;
+    ctx.fillText(lbl,d.x,dy-(n.count!==null?4:0));
+    if(n.count!==null){ctx.fillStyle=tS;ctx.font='400 '+(fs-1)+'px "'+F+'",system-ui,sans-serif';ctx.fillText(String(n.count),d.x,dy+fs);}
+  }
+  ctx.globalAlpha=1;
+}}
+
+function sbGrouped(t,s,groups){document.getElementById('st').textContent=t;document.getElementById('ss').textContent=s;var el=document.getElementById('sl');el.innerHTML='';groups.forEach(function(grp){if(grp.label){var sep=document.createElement('div');sep.className='sep';sep.textContent=grp.label;el.appendChild(sep);}var ul=document.createElement('ul');ul.style.listStyle='none';var sorted=grp.items.slice().sort(function(a,b){return b.c-a.c;});var mx=sorted[0]?sorted[0].c:1;sorted.forEach(function(it){var li=document.createElement('li');if(it.click)li.className='clk';var pp=P[it.g]||P.center,extra='';if(it.role)extra='<div class="rl">'+it.role+'</div>';var cl=it.hideCount?'':it.suffix?it.c+' '+it.suffix:String(it.c);li.innerHTML='<div class="row"><span class="nm">'+it.n+'</span><span class="ct">'+cl+'</span></div>'+extra+'<div class="br" style="width:'+Math.round(it.c/mx*100)+'%;background:'+pp.b+'"></div>';if(it.click)li.addEventListener('click',it.click);ul.appendChild(li);});el.appendChild(ul);});}
+function sbFlat(t,s,items,opts){document.getElementById('st').textContent=t;document.getElementById('ss').textContent=s;var el=document.getElementById('sl');el.innerHTML='';var ul=document.createElement('ul');ul.style.listStyle='none';var sorted=items.slice().sort(function(a,b){return b.c-a.c;});var mx=sorted[0]?sorted[0].c:1;sorted.forEach(function(it){var li=document.createElement('li');if(it.click)li.className='clk';var pp=P[it.g]||P.center;var cl=(opts&&opts.hideCount)?'':it.suffix?it.c+' '+it.suffix:String(it.c);li.innerHTML='<div class="row"><span class="nm">'+it.n+'</span><span class="ct">'+cl+'</span></div><div class="br" style="width:'+Math.round(it.c/mx*100)+'%;background:'+pp.b+'"></div>';if(it.click)li.addEventListener('click',it.click);ul.appendChild(li);});el.appendChild(ul);}
+function legend(pairs){document.getElementById('leg').innerHTML=pairs.map(function(p){return '<span><span class="ld" style="background:'+p[0]+'"></span>'+p[1]+'</span>';}).join('');}
+function setHdr(btns,crumb){var hdr=document.getElementById('hdr');hdr.innerHTML='';btns.forEach(function(b){var btn=document.createElement('button');btn.textContent='\u2039 '+b.label;btn.addEventListener('click',b.action);hdr.appendChild(btn);});var sp=document.createElement('span');sp.textContent=crumb;hdr.appendChild(sp);}
+
+var NAV={};
+function go(v){NAV=v;topLinks=[];clusterZones=[];v.render();startAnim();}
+
+function viewTop(){return{view:'top',render:function(){
+  var cx=W*0.43,cy=H*0.5;nodes=[];
+  var mx=1;PEOPLE.forEach(function(p){if(p.c>mx)mx=p.c;});
+  var grouped={};PEOPLE.forEach(function(p){var ci=getPCl(p);if(!grouped[ci])grouped[ci]=[];grouped[ci].push(p);});
+  var sc=Math.min(W,H)*0.25;
+  PCLUSTERS.forEach(function(cl,ci){var members=grouped[ci]||[];var ang=cl.angle,ccx=cx+Math.cos(ang)*sc,ccy=cy+Math.sin(ang)*sc;var idxList=[];
+    members.forEach(function(p,i){var r=22+(p.c/mx)*32;var subAng=ang+(i-(members.length-1)/2)*0.32;var subDist=40+r*0.7+Math.random()*15;var idx=nodes.length;nodes.push({name:p.n,count:p.c,group:p.dept,x:ccx+Math.cos(subAng)*subDist,y:ccy+Math.sin(subAng)*subDist,r:r,clickable:true,_action:(function(nm){return function(){go(viewPerson(nm));};})(p.n),cluster:ci});idxList.push(idx);});
+    clusterZones.push({indices:idxList,cx:ccx,cy:ccy,label:cl.label});
+  });
+  for(var i=0;i<PEOPLE.length;i++){for(var j=i+1;j<PEOPLE.length;j++){var shared=0;PEOPLE[i].projects.forEach(function(pr){if(PEOPLE[j].projects.indexOf(pr)>=0)shared++;});if(shared>=2)topLinks.push({from:PEOPLE[i].n,to:PEOPLE[j].n,weight:shared});}}
+  physics(400,false);
+  var maxD=Math.min(W*0.38,H*0.44);nodes.forEach(function(nd){var dx=nd.x-cx,dy=nd.y-cy,d=Math.sqrt(dx*dx+dy*dy)||1;if(d>maxD){nd.x=cx+(dx/d)*maxD;nd.y=cy+(dy/d)*maxD;}});
+  setHdr([],PEOPLE.length+' team members \u2014 click to explore');
+  legend([[P.strategy.b,'Strategy'],[P.design.b,'Design'],[P.engineering.b,'Engineering'],[P.production.b,'Production']]);
+  var groups=[];PCLUSTERS.forEach(function(cl,ci){var members=PEOPLE.filter(function(p){return getPCl(p)===ci;});if(members.length)groups.push({label:cl.label,items:members.map(function(p){return{n:p.n,c:p.c,g:p.dept,role:p.role,suffix:'proj',click:function(){go(viewPerson(p.n));}};})});});
+  sbGrouped('Team',PEOPLE.length+' members',groups);
+}};}
+
+function viewPerson(name){return{view:'person',render:function(){
+  var person=null;PEOPLE.forEach(function(p){if(p.n===name)person=p;});if(!person)return;
+  var cx=W*0.43,cy=H*0.5;
+  nodes=[{name:person.n,count:null,group:'center',x:cx,y:cy,r:58,clickable:false,_isPerson:true}];
+
+  var allExpClusters=[];
+  var clusterIdx=0;
+  var expCount=0;
+  person.expertises.forEach(function(eName){
+    var ed=EXPERT_DATA[eName];if(!ed)return;
+    ed.clusters.forEach(function(cl){
+      allExpClusters.push({expertise:eName,pe:cl.pe,sc:cl.sc,ci:clusterIdx});
+      expCount+=cl.pe.length+cl.sc.length;
+      clusterIdx++;
+    });
+  });
+
+  var indCount=person.industries.length;
+  var totalClusters=allExpClusters.length;
+  var totalSlots=totalClusters+indCount;
+
+  var allMx=1;
+  allExpClusters.forEach(function(cl){cl.pe.forEach(function(e){if(e.c>allMx)allMx=e.c;});cl.sc.forEach(function(e){if(e.c>allMx)allMx=e.c;});});
+  person.industries.forEach(function(e){var ic=INDUSTRY_CLIENTS[e]?INDUSTRY_CLIENTS[e].length:2;if(ic>allMx)allMx=ic;});
+
+  // Expertise clusters: upper arc (-π to 0), centred on top of canvas
+  var sc=Math.min(W,H)*0.23;
+  var expAngStart=-Math.PI,expAngEnd=0;
+  allExpClusters.forEach(function(ecl,clIdx){
+    var t=totalClusters>1?clIdx/(totalClusters-1):0.5;
+    var ang=expAngStart+t*(expAngEnd-expAngStart);
+    var clDist=sc;
+    var ccx=cx+Math.cos(ang)*clDist,ccy=cy+Math.sin(ang)*clDist;
+    var combined=[];
+    ecl.pe.forEach(function(e){combined.push({n:e.n,c:e.c,g:'projectExp',_action:function(){go(viewPE(e.n,ecl.expertise,name));}});});
+    ecl.sc.forEach(function(e){combined.push({n:e.n,c:e.c,g:'sector',_action:function(){go(viewSector(e.n,ecl.expertise,name));}});});
+    var idxList=[];
+    combined.forEach(function(item,ii){
+      var r=16+(item.c/allMx)*36;
+      var subAng=ang+(ii-(combined.length-1)/2)*0.35;
+      var subDist=22+r*0.5;
+      var idx=nodes.length;
+      nodes.push({name:item.n,count:item.c,group:item.g,x:ccx+Math.cos(subAng)*subDist,y:ccy+Math.sin(subAng)*subDist,r:r,clickable:true,_action:item._action,cluster:ecl.ci});
+      idxList.push(idx);
+    });
+    clusterZones.push({indices:idxList,cx:ccx,cy:ccy});
+  });
+
+  // Industries: lower arc (π*0.15 to π*0.85), pushed further out and grouped into one cluster zone
+  var indAngStart=Math.PI*0.15,indAngEnd=Math.PI*0.85;
+  var indIdxList=[];
+  person.industries.forEach(function(indName,ii){
+    var t=indCount>1?ii/(indCount-1):0.5;
+    var ang=indAngStart+t*(indAngEnd-indAngStart);
+    var ic=INDUSTRY_CLIENTS[indName]?INDUSTRY_CLIENTS[indName].length:2;
+    var r=20+(ic/allMx)*40;
+    var d=sc*1.4+r*0.4;
+    var idx=nodes.length;
+    nodes.push({name:indName,count:ic,group:'industry',x:cx+Math.cos(ang)*d,y:cy+Math.sin(ang)*d,r:r,clickable:true,_action:function(){go(viewIndustry(indName,name));}});
+    indIdxList.push(idx);
+  });
+  if(indIdxList.length>0){var indMidAng=(indAngStart+indAngEnd)/2;clusterZones.push({indices:indIdxList,cx:cx+Math.cos(indMidAng)*(sc*1.4),cy:cy+Math.sin(indMidAng)*(sc*1.4),label:'Industries'});}
+
+  physics(350,true);
+  var totalNodes=nodes.length-1;
+  setHdr([{label:'Team',action:function(){go(viewTop());}}],person.n);
+  legend([[P.projectExp.b,'Project experience'],[P.sector.b,'Sector'],[P.industry.b,'Industry exposure']]);
+
+  var sbGroups=[];
+  person.expertises.forEach(function(eName){
+    var ed=EXPERT_DATA[eName];if(!ed)return;
+    var items=[];
+    ed.clusters.forEach(function(cl){
+      cl.pe.forEach(function(e){items.push({n:e.n,c:e.c,g:'projectExp',click:function(){go(viewPE(e.n,eName,name));}});});
+      cl.sc.forEach(function(e){items.push({n:e.n,c:e.c,g:'sector',click:function(){go(viewSector(e.n,eName,name));}});});
+    });
+    sbGroups.push({label:eName,items:items});
+  });
+  sbGroups.push({label:'Industry exposure',items:person.industries.map(function(e){return{n:e,c:INDUSTRY_CLIENTS[e]?INDUSTRY_CLIENTS[e].length:2,g:'industry',suffix:'clients',click:function(){go(viewIndustry(e,name));}};})});
+  sbGrouped(person.n,person.role+' \u00b7 '+person.c+' projects',sbGroups);
+}};}
+
+function viewIndustry(name,pn){return{view:'industry',render:function(){
+  var clients=INDUSTRY_CLIENTS[name]||[];var cx=W*0.43,cy=H*0.5;
+  nodes=[{name:name,count:null,group:'center',x:cx,y:cy,r:44,clickable:false}];
+  var mx=1;clients.forEach(function(c){var pc=cpc(c.n);if(pc>mx)mx=pc;});
+  clients.forEach(function(cl,i){var pc=cpc(cl.n);var r=20+(pc/Math.max(mx,1))*46;var a=(i/clients.length)*Math.PI*2-Math.PI/2;var d=95+r+Math.random()*38;nodes.push({name:cl.n,count:pc,group:'client',x:cx+Math.cos(a)*d,y:cy+Math.sin(a)*d,r:r,clickable:true,_action:function(){go(viewClientProj(cl.n,name,pn));}});});
+  physics(300,true);
+  setHdr([{label:'Team',action:function(){go(viewTop());}},{label:pn,action:function(){go(viewPerson(pn));}}],clients.length+' clients');
+  legend([[P.client.b,'Client']]);
+  sbFlat(name,clients.length+' clients',clients.map(function(cl){var pc=cpc(cl.n);return{n:cl.n,c:pc,g:'client',suffix:pc===1?'project':'projects',click:function(){go(viewClientProj(cl.n,name,pn));}};}));
+}};}
+
+function viewClientProj(cn,fn,pn){return{view:'cp',render:function(){
+  var projects=CLIENT_PROJECTS[cn]||[];var cx=W*0.43,cy=H*0.5;
+  nodes=[{name:cn,count:null,group:'center',x:cx,y:cy,r:44,clickable:false}];
+  projects.forEach(function(pr,i){var a=(i/Math.max(projects.length,1))*Math.PI*2-Math.PI/2;nodes.push({name:pr,count:null,group:'project',x:cx+Math.cos(a)*90,y:cy+Math.sin(a)*90,r:32,clickable:false});});physics(250,true);
+  var btns=[{label:'Team',action:function(){go(viewTop());}}];if(pn)btns.push({label:pn,action:function(){go(viewPerson(pn));}});if(fn)btns.push({label:fn,action:function(){if(INDUSTRY_CLIENTS[fn])go(viewIndustry(fn,pn));else go(viewSector(fn,null,pn));}});
+  setHdr(btns,projects.length+' project'+(projects.length!==1?'s':''));legend([[P.project.b,'Project']]);
+  sbFlat(cn,projects.length+' project'+(projects.length!==1?'s':''),projects.map(function(pr){return{n:pr,c:1,g:'project'};}),{hideCount:true});
+}};}
+
+function viewPE(name,en,pn){return{view:'pe',render:function(){
+  var projects=PE_PROJECTS[name]||[];var cx=W*0.43,cy=H*0.5;
+  nodes=[{name:name,count:null,group:'center',x:cx,y:cy,r:44,clickable:false}];
+  projects.forEach(function(pr,i){var a=(i/Math.max(projects.length,1))*Math.PI*2-Math.PI/2;nodes.push({name:pr,count:null,group:'project',x:cx+Math.cos(a)*90,y:cy+Math.sin(a)*90,r:32,clickable:false});});physics(250,true);
+  setHdr([{label:'Team',action:function(){go(viewTop());}},{label:pn,action:function(){go(viewPerson(pn));}}],projects.length+' project'+(projects.length!==1?'s':''));legend([[P.project.b,'Project']]);
+  sbFlat(name,projects.length+' project'+(projects.length!==1?'s':''),projects.map(function(pr){return{n:pr,c:1,g:'project'};}),{hideCount:true});
+}};}
+
+function viewSector(name,en,pn){return{view:'sector',render:function(){
+  var clients=SECTOR_CLIENTS[name]||[];var cx=W*0.43,cy=H*0.5;
+  nodes=[{name:name,count:null,group:'center',x:cx,y:cy,r:44,clickable:false}];
+  var mx=1;clients.forEach(function(cl){var pc=cpc(cl);if(pc>mx)mx=pc;});
+  clients.forEach(function(cl,i){var pc=cpc(cl);var r=20+(pc/Math.max(mx,1))*42;var a=(i/Math.max(clients.length,1))*Math.PI*2-Math.PI/2;nodes.push({name:cl,count:pc,group:'client',x:cx+Math.cos(a)*(90+r),y:cy+Math.sin(a)*(90+r),r:r,clickable:true,_action:function(){go(viewClientProj(cl,name,pn));}});});physics(250,true);
+  var btns=[{label:'Team',action:function(){go(viewTop());}},{label:pn,action:function(){go(viewPerson(pn));}}];
+  setHdr(btns,clients.length+' clients');legend([[P.client.b,'Client']]);
+  sbFlat(name,clients.length+' clients',clients.map(function(cl){var pc=cpc(cl);return{n:cl,c:pc,g:'client',suffix:pc===1?'project':'projects',click:function(){go(viewClientProj(cl,name,pn));}};}));
+}};}
+
+function hitTest(mx,my){var dn=displayNodes.length?displayNodes:nodes.map(function(n){return{x:n.x,y:n.y,r:n.r};});for(var i=nodes.length-1;i>=0;i--){if(!dn[i])continue;var d=dn[i],dx=mx-d.x,dy=my-d.y;if(dx*dx+dy*dy<=d.r*d.r)return i;}return -1;}
+function startHoverAnim(){
+  if(hoverAnimFrame)return;
+  function loop(){if(hovered<0){hoverAnimFrame=null;draw();return;}hoverAnimFrame=requestAnimationFrame(loop);draw();}
+  hoverAnimFrame=requestAnimationFrame(loop);
+}
+cv.addEventListener('pointermove',function(e){var r=cv.getBoundingClientRect();var prev=hovered;hovered=hitTest(e.clientX-r.left,e.clientY-r.top);cv.style.cursor=(hovered>=0&&nodes[hovered].clickable)?'pointer':'default';if(hovered>=0&&prev!==hovered){hoverStart=performance.now();startHoverAnim();}if(!animFrame&&hovered<0&&!hoverAnimFrame)draw();});
+cv.addEventListener('pointerdown',function(e){var r=cv.getBoundingClientRect();var idx=hitTest(e.clientX-r.left,e.clientY-r.top);if(idx<0)return;var n=nodes[idx];if(!n.clickable||!n._action)return;n._action();});
+cv.addEventListener('pointerleave',function(){hovered=-1;if(!animFrame&&!hoverAnimFrame)draw();});
+resize();go(viewTop());
+window.addEventListener('resize',function(){resize();NAV.render();startAnim();});
+return{filter:function(v){search=v.toLowerCase();if(!animFrame)draw();}};
+})();
+</script>
+</body>
+</html>
