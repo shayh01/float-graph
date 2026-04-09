@@ -314,7 +314,7 @@ function viewPerson(name){return{view:'person',render:function(){
       var r=child.g==='projectExp'?Math.max(28,20+(PE_PROJECTS[child.n]||[]).length*10):Math.max(28,16+(SECTOR_CLIENTS[child.n]||[]).length*9);
       var childDist=Math.max(0,(indNode.r-r-8)*0.55);
       var cidx=nodes.length;
-      nodes.push({name:child.n,count:child.c,group:child.g,x:indNode.x+Math.cos(childAng)*childDist,y:indNode.y+Math.sin(childAng)*childDist,r:r,clickable:true,_action:(function(cn,cg,en_){return cg==='projectExp'?function(){go(viewPE(cn,en_,name));}:function(){go(viewSector(cn,en_,name));};})(child.n,child.g,child.en),_parentIdx:1+ii});
+      nodes.push({name:child.n,count:child.g==='projectExp'?(PE_PROJECTS[child.n]||[]).length:(SECTOR_CLIENTS[child.n]||[]).length,group:child.g,x:indNode.x+Math.cos(childAng)*childDist,y:indNode.y+Math.sin(childAng)*childDist,r:r,clickable:true,_action:(function(cn,cg,en_){return cg==='projectExp'?function(){go(viewPE(cn,en_,name));}:function(){go(viewSector(cn,en_,name));};})(child.n,child.g,child.en),_parentIdx:1+ii});
       idxList.push(cidx);
     });
     clusterZones.push({indices:idxList,cx:indNode.x,cy:indNode.y,_skipRect:true});
