@@ -156,6 +156,7 @@ topLinks.forEach(function(lk){
   ctx.beginPath();ctx.moveTo(dn[ai].x,dn[ai].y);ctx.lineTo(dn[bi].x,dn[bi].y);ctx.strokeStyle=sharedC;ctx.lineWidth=Math.min(lk.weight*0.8,3);ctx.stroke();ctx.globalAlpha=1;
 });
 clusterZones.forEach(function(zone){
+  if(zone._skipRect)return;
   if(!zone.indices||zone.indices.length<2)return;
   var mnx=9999,mny=9999,mxx=-9999,mxy=-9999;
   zone.indices.forEach(function(idx){if(!dn[idx])return;var d=dn[idx];mnx=Math.min(mnx,d.x-d.r-8);mny=Math.min(mny,d.y-d.r-8);mxx=Math.max(mxx,d.x+d.r+8);mxy=Math.max(mxy,d.y+d.r+8);});
@@ -170,41 +171,53 @@ clusterZones.forEach(function(zone){
 });
 var hasCenter=nodes.length>0&&nodes[0].group==='center';
 if(hasCenter&&dn[0]){
-  for(var i=1;i<nodes.length;i++){if(!dn[i])continue;if(search&&nodes[i].name.toLowerCase().indexOf(search)<0)continue;ctx.globalAlpha=dn[i].opacity*0.4;ctx.beginPath();ctx.moveTo(dn[0].x,dn[0].y);ctx.lineTo(dn[i].x,dn[i].y);ctx.strokeStyle=lnC;ctx.lineWidth=0.5;ctx.stroke();}ctx.globalAlpha=1;
+  for(var i=1;i<nodes.length;i++){if(!dn[i])continue;if(nodes[i]._parentIdx!==undefined)continue;if(search&&nodes[i].name.toLowerCase().indexOf(search)<0)continue;ctx.globalAlpha=dn[i].opacity*0.4;ctx.beginPath();ctx.moveTo(dn[0].x,dn[0].y);ctx.lineTo(dn[i].x,dn[i].y);ctx.strokeStyle=lnC;ctx.lineWidth=0.5;ctx.stroke();}ctx.globalAlpha=1;
 }
 for(var i=0;i<nodes.length;i++){
   var n=nodes[i];if(!dn[i])continue;
   if(hasCenter&&i>0&&search&&n.name.toLowerCase().indexOf(search)<0)continue;
   if(!hasCenter&&search&&n.name.toLowerCase().indexOf(search)<0)continue;
   var d=dn[i],isH=hovered===i,p=P[n.group]||P.center;
-  var isHover=isH&&n.group!=='center';
-  var fy=isHover?Math.sin((performance.now()-hoverStart)*0.0025)*5:0;
-  var dy=d.y+fy;
-  ctx.globalAlpha=d.opacity;
-  if(isHover){
-    var pulse=(Math.sin((performance.now()-hoverStart)*0.004)+1)*0.5;
-    ctx.beginPath();ctx.arc(d.x,dy,d.r*(1.38+pulse*0.1),0,Math.PI*2);
-    ctx.strokeStyle=p.b;ctx.lineWidth=1;ctx.globalAlpha=d.opacity*0.15*pulse;ctx.stroke();
-    ctx.beginPath();ctx.arc(d.x,dy,d.r*1.2,0,Math.PI*2);
-    ctx.strokeStyle=p.b;ctx.lineWidth=0.8;ctx.globalAlpha=d.opacity*0.22;ctx.stroke();
+  if(n._isContainer){
+    // Faded parent bubble — draw behind its children
+    ctx.globalAlpha=d.opacity*0.45;
+    ctx.beginPath();ctx.arc(d.x,d.y,d.r,0,Math.PI*2);ctx.fillStyle=p.f;ctx.fill();
+    ctx.strokeStyle=p.s;ctx.lineWidth=isH?1.2:0.7;ctx.globalAlpha=d.opacity*(isH?0.5:0.28);ctx.stroke();
     ctx.globalAlpha=d.opacity;
-    ctx.shadowBlur=24;ctx.shadowColor=p.b;
-  }
-  ctx.beginPath();ctx.arc(d.x,dy,d.r*(isHover?1.08:1),0,Math.PI*2);ctx.fillStyle=p.f;ctx.fill();ctx.strokeStyle=p.s;ctx.lineWidth=isHover?1.8:0.5;ctx.stroke();
-  ctx.shadowBlur=0;
-  var fs=d.r>48?14:d.r>26?12:11;ctx.textAlign='center';ctx.textBaseline='middle';
-  var lbl=n.name;if(lbl.length>18&&d.r<40)lbl=lbl.substring(0,15)+'...';
-  if(n._isPerson){
-    ctx.font='500 14px "'+F+'",system-ui,sans-serif';ctx.fillStyle=tC;ctx.fillText(lbl,d.x,dy-6);
-    ctx.fillStyle=tS;ctx.font='400 11px "'+F+'",system-ui,sans-serif';ctx.fillText('Experience',d.x,dy+12);
-  } else if(n.group==='project'){
-    ctx.font='500 '+fs+'px "'+F+'",system-ui,sans-serif';ctx.fillStyle=tC;ctx.fillText(lbl,d.x,dy);
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font='500 11px "'+F+'",system-ui,sans-serif';ctx.fillStyle=p.b;
+    ctx.fillText(n.name,d.x,d.y-d.r+16);
+    ctx.globalAlpha=1;
   } else {
-    ctx.font='500 '+fs+'px "'+F+'",system-ui,sans-serif';ctx.fillStyle=tC;
-    ctx.fillText(lbl,d.x,dy-(n.count!==null?4:0));
-    if(n.count!==null){ctx.fillStyle=tS;ctx.font='400 '+(fs-1)+'px "'+F+'",system-ui,sans-serif';ctx.fillText(String(n.count),d.x,dy+fs);}
+    var isHover=isH&&n.group!=='center'&&n.group!=='project';
+    var fy=isHover?Math.sin((performance.now()-hoverStart)*0.0025)*5:0;
+    var dy=d.y+fy;
+    ctx.globalAlpha=d.opacity;
+    if(isHover){
+      var pulse=(Math.sin((performance.now()-hoverStart)*0.004)+1)*0.5;
+      ctx.beginPath();ctx.arc(d.x,dy,d.r*(1.38+pulse*0.1),0,Math.PI*2);
+      ctx.strokeStyle=p.b;ctx.lineWidth=1;ctx.globalAlpha=d.opacity*0.15*pulse;ctx.stroke();
+      ctx.beginPath();ctx.arc(d.x,dy,d.r*1.2,0,Math.PI*2);
+      ctx.strokeStyle=p.b;ctx.lineWidth=0.8;ctx.globalAlpha=d.opacity*0.22;ctx.stroke();
+      ctx.globalAlpha=d.opacity;
+      ctx.shadowBlur=24;ctx.shadowColor=p.b;
+    }
+    ctx.beginPath();ctx.arc(d.x,dy,d.r*(isHover?1.08:1),0,Math.PI*2);ctx.fillStyle=p.f;ctx.fill();ctx.strokeStyle=p.s;ctx.lineWidth=isHover?1.8:0.5;ctx.stroke();
+    ctx.shadowBlur=0;
+    var fs=d.r>48?14:d.r>26?12:11;ctx.textAlign='center';ctx.textBaseline='middle';
+    var lbl=n.name;if(lbl.length>18&&d.r<40)lbl=lbl.substring(0,15)+'...';
+    if(n._isPerson){
+      ctx.font='500 14px "'+F+'",system-ui,sans-serif';ctx.fillStyle=tC;ctx.fillText(lbl,d.x,dy-6);
+      ctx.fillStyle=tS;ctx.font='400 11px "'+F+'",system-ui,sans-serif';ctx.fillText('Experience',d.x,dy+12);
+    } else if(n.group==='project'){
+      ctx.font='500 '+fs+'px "'+F+'",system-ui,sans-serif';ctx.fillStyle=tC;ctx.fillText(lbl,d.x,dy);
+    } else {
+      ctx.font='500 '+fs+'px "'+F+'",system-ui,sans-serif';ctx.fillStyle=tC;
+      ctx.fillText(lbl,d.x,dy-(n.count!==null?4:0));
+      if(n.count!==null){ctx.fillStyle=tS;ctx.font='400 '+(fs-1)+'px "'+F+'",system-ui,sans-serif';ctx.fillText(String(n.count),d.x,dy+fs);}
+    }
+    ctx.globalAlpha=1;
   }
-  ctx.globalAlpha=1;
 }}
 
 function sbGrouped(t,s,groups){document.getElementById('st').textContent=t;document.getElementById('ss').textContent=s;var el=document.getElementById('sl');el.innerHTML='';groups.forEach(function(grp){if(grp.label){var sep=document.createElement('div');sep.className='sep';sep.textContent=grp.label;el.appendChild(sep);}var ul=document.createElement('ul');ul.style.listStyle='none';var sorted=grp.items.slice().sort(function(a,b){return b.c-a.c;});var mx=sorted[0]?sorted[0].c:1;sorted.forEach(function(it){var li=document.createElement('li');if(it.click)li.className='clk';var pp=P[it.g]||P.center,extra='';if(it.role)extra='<div class="rl">'+it.role+'</div>';var cl=it.hideCount?'':it.suffix?it.c+' '+it.suffix:String(it.c);li.innerHTML='<div class="row"><span class="nm">'+it.n+'</span><span class="ct">'+cl+'</span></div>'+extra+'<div class="br" style="width:'+Math.round(it.c/mx*100)+'%;background:'+pp.b+'"></div>';if(it.click)li.addEventListener('click',it.click);ul.appendChild(li);});el.appendChild(ul);});}
@@ -238,80 +251,62 @@ function viewPerson(name){return{view:'person',render:function(){
   var cx=W*0.43,cy=H*0.5;
   nodes=[{name:person.n,count:null,group:'center',x:cx,y:cy,r:58,clickable:false,_isPerson:true}];
 
-  var allExpClusters=[];
-  var clusterIdx=0;
-  var expCount=0;
-  person.expertises.forEach(function(eName){
-    var ed=EXPERT_DATA[eName];if(!ed)return;
-    ed.clusters.forEach(function(cl){
-      allExpClusters.push({expertise:eName,pe:cl.pe,sc:cl.sc,ci:clusterIdx});
-      expCount+=cl.pe.length+cl.sc.length;
-      clusterIdx++;
-    });
-  });
-
-  var indCount=person.industries.length;
-  var totalClusters=allExpClusters.length;
-  var totalSlots=totalClusters+indCount;
-
   var allMx=1;
-  allExpClusters.forEach(function(cl){cl.pe.forEach(function(e){if(e.c>allMx)allMx=e.c;});cl.sc.forEach(function(e){if(e.c>allMx)allMx=e.c;});});
+  person.expertises.forEach(function(eName){var ed=EXPERT_DATA[eName];if(!ed)return;ed.clusters.forEach(function(cl){cl.pe.forEach(function(e){if(e.c>allMx)allMx=e.c;});cl.sc.forEach(function(e){if(e.c>allMx)allMx=e.c;});});});
   person.industries.forEach(function(e){var ic=INDUSTRY_CLIENTS[e]?INDUSTRY_CLIENTS[e].length:2;if(ic>allMx)allMx=ic;});
 
-  // Expertise clusters: upper arc (-π to 0), centred on top of canvas
-  var sc=Math.min(W,H)*0.23;
-  var expAngStart=-Math.PI,expAngEnd=0;
-  allExpClusters.forEach(function(ecl,clIdx){
-    var t=totalClusters>1?clIdx/(totalClusters-1):0.5;
-    var ang=expAngStart+t*(expAngEnd-expAngStart);
-    var clDist=sc;
-    var ccx=cx+Math.cos(ang)*clDist,ccy=cy+Math.sin(ang)*clDist;
-    var combined=[];
-    ecl.pe.forEach(function(e){combined.push({n:e.n,c:e.c,g:'projectExp',_action:function(){go(viewPE(e.n,ecl.expertise,name));}});});
-    ecl.sc.forEach(function(e){combined.push({n:e.n,c:e.c,g:'sector',_action:function(){go(viewSector(e.n,ecl.expertise,name));}});});
-    var idxList=[];
-    combined.forEach(function(item,ii){
-      var r=16+(item.c/allMx)*36;
-      var subAng=ang+(ii-(combined.length-1)/2)*0.35;
-      var subDist=22+r*0.5;
-      var idx=nodes.length;
-      nodes.push({name:item.n,count:item.c,group:item.g,x:ccx+Math.cos(subAng)*subDist,y:ccy+Math.sin(subAng)*subDist,r:r,clickable:true,_action:item._action,cluster:ecl.ci});
-      idxList.push(idx);
+  // Build industry -> related expertise + sector children via shared clients
+  var indItems=person.industries.map(function(indName){
+    var indClients=(INDUSTRY_CLIENTS[indName]||[]).map(function(c){return c.n;});
+    var children=[];var seen={};
+    person.expertises.forEach(function(eName){
+      var ed=EXPERT_DATA[eName];if(!ed)return;
+      ed.clusters.forEach(function(cl){
+        var clHasInd=cl.sc.some(function(sc){return(SECTOR_CLIENTS[sc.n]||[]).some(function(c){return indClients.indexOf(c)>=0;});});
+        if(!clHasInd)return;
+        cl.pe.forEach(function(e){if(!seen[e.n]){seen[e.n]=true;children.push({n:e.n,c:e.c,g:'projectExp',en:eName});}});
+        cl.sc.forEach(function(sc){if(!seen[sc.n]&&(SECTOR_CLIENTS[sc.n]||[]).some(function(c){return indClients.indexOf(c)>=0;})){seen[sc.n]=true;children.push({n:sc.n,c:sc.c,g:'sector',en:eName});}});
+      });
     });
-    clusterZones.push({indices:idxList,cx:ccx,cy:ccy});
-  });
-
-  // Industries: lower arc (π*0.15 to π*0.85), pushed further out and grouped into one cluster zone
-  var indAngStart=Math.PI*0.15,indAngEnd=Math.PI*0.85;
-  var indIdxList=[];
-  person.industries.forEach(function(indName,ii){
-    var t=indCount>1?ii/(indCount-1):0.5;
-    var ang=indAngStart+t*(indAngEnd-indAngStart);
     var ic=INDUSTRY_CLIENTS[indName]?INDUSTRY_CLIENTS[indName].length:2;
-    var r=20+(ic/allMx)*40;
-    var d=sc*1.4+r*0.4;
-    var idx=nodes.length;
-    nodes.push({name:indName,count:ic,group:'industry',x:cx+Math.cos(ang)*d,y:cy+Math.sin(ang)*d,r:r,clickable:true,_action:function(){go(viewIndustry(indName,name));}});
-    indIdxList.push(idx);
+    return{name:indName,children:children,ic:ic};
   });
-  if(indIdxList.length>0){var indMidAng=(indAngStart+indAngEnd)/2;clusterZones.push({indices:indIdxList,cx:cx+Math.cos(indMidAng)*(sc*1.4),cy:cy+Math.sin(indMidAng)*(sc*1.4),label:'Industries'});}
 
+  var sc2=Math.min(W,H)*0.23;
+  var numInd=indItems.length;
+
+  // Phase 1: physics on industry container nodes only
+  indItems.forEach(function(ind,ii){
+    var ang=-Math.PI/2+(ii/numInd)*Math.PI*2;
+    var indR=Math.max(80,60+ind.children.length*13);
+    var dist=58+indR+sc2*0.3;
+    nodes.push({name:ind.name,count:ind.ic,group:'industry',x:cx+Math.cos(ang)*dist,y:cy+Math.sin(ang)*dist,r:indR,clickable:true,_action:(function(n,pn){return function(){go(viewIndustry(n,pn));};})(ind.name,name),_isContainer:true});
+  });
   physics(350,true);
-  var totalNodes=nodes.length-1;
+
+  // Phase 2: pin children geometrically inside settled industry nodes
+  indItems.forEach(function(ind,ii){
+    var indNode=nodes[1+ii];var idxList=[1+ii];
+    ind.children.forEach(function(child,ci){
+      var childAng=(ci/Math.max(ind.children.length,1))*Math.PI*2-Math.PI/2;
+      var r=16+(child.c/allMx)*32;
+      var childDist=Math.max(0,(indNode.r-r-8)*0.55);
+      var cidx=nodes.length;
+      nodes.push({name:child.n,count:child.c,group:child.g,x:indNode.x+Math.cos(childAng)*childDist,y:indNode.y+Math.sin(childAng)*childDist,r:r,clickable:true,_action:(function(cn,cg,en_){return cg==='projectExp'?function(){go(viewPE(cn,en_,name));}:function(){go(viewSector(cn,en_,name));};})(child.n,child.g,child.en),_parentIdx:1+ii});
+      idxList.push(cidx);
+    });
+    clusterZones.push({indices:idxList,cx:indNode.x,cy:indNode.y,_skipRect:true});
+  });
+
   setHdr([{label:'Team',action:function(){go(viewTop());}}],person.n);
-  legend([[P.projectExp.b,'Project experience'],[P.sector.b,'Sector'],[P.industry.b,'Industry exposure']]);
+  legend([[P.projectExp.b,'Project experience'],[P.sector.b,'Sector'],[P.industry.b,'Industry']]);
 
   var sbGroups=[];
-  person.expertises.forEach(function(eName){
-    var ed=EXPERT_DATA[eName];if(!ed)return;
-    var items=[];
-    ed.clusters.forEach(function(cl){
-      cl.pe.forEach(function(e){items.push({n:e.n,c:e.c,g:'projectExp',click:function(){go(viewPE(e.n,eName,name));}});});
-      cl.sc.forEach(function(e){items.push({n:e.n,c:e.c,g:'sector',click:function(){go(viewSector(e.n,eName,name));}});});
-    });
-    sbGroups.push({label:eName,items:items});
+  indItems.forEach(function(ind){
+    var items=ind.children.map(function(c){return{n:c.n,c:c.c,g:c.g,click:(function(cn,cg,en_){return cg==='projectExp'?function(){go(viewPE(cn,en_,name));}:function(){go(viewSector(cn,en_,name));};})(c.n,c.g,c.en)};});
+    items.push({n:ind.name,c:ind.ic,g:'industry',suffix:'clients',click:(function(n){return function(){go(viewIndustry(n,name));};})(ind.name)});
+    sbGroups.push({label:ind.name,items:items});
   });
-  sbGroups.push({label:'Industry exposure',items:person.industries.map(function(e){return{n:e,c:INDUSTRY_CLIENTS[e]?INDUSTRY_CLIENTS[e].length:2,g:'industry',suffix:'clients',click:function(){go(viewIndustry(e,name));}};})});
   sbGrouped(person.n,person.role+' \u00b7 '+person.c+' projects',sbGroups);
 }};}
 
