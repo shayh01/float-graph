@@ -116,6 +116,7 @@ var SECTOR_CLIENTS={'SaaS':['Stripe','Figma','Notion','Linear','Vercel'],'Fintec
 
 function cpc(n){return(CLIENT_PROJECTS[n]||[]).length;}
 function teamCount(proj){var c=0;PEOPLE.forEach(function(p){if(p.projects.indexOf(proj)>=0)c++;});return c;}
+function clientVal(cn){var v=1;Object.keys(INDUSTRY_CLIENTS).forEach(function(k){(INDUSTRY_CLIENTS[k]||[]).forEach(function(c){if(c.n===cn)v=c.c;});});return v;}
 function resize(){dpr=window.devicePixelRatio||1;var r=cv.parentElement.getBoundingClientRect();W=r.width;H=Math.max(r.height,1040);cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0);}
 function getPCl(p){var best=-1,bi=0;PCLUSTERS.forEach(function(cl,ci){var o=0;p.projects.forEach(function(pr){if(cl.projects.indexOf(pr)>=0)o++;});if(o>best){best=o;bi=ci;}});return bi;}
 
@@ -335,8 +336,8 @@ function viewPerson(name){return{view:'person',render:function(){
 function viewIndustry(name,pn){return{view:'industry',render:function(){
   var clients=INDUSTRY_CLIENTS[name]||[];var cx=W*0.43,cy=H*0.5;
   nodes=[{name:name,count:null,group:'center',x:cx,y:cy,r:64,clickable:false}];
-  var mx=1;clients.forEach(function(c){var pc=cpc(c.n);if(pc>mx)mx=pc;});
-  clients.forEach(function(cl,i){var pc=cpc(cl.n);var r=20+(pc/Math.max(mx,1))*46;var a=(i/clients.length)*Math.PI*2-Math.PI/2;var d=95+r+Math.random()*38;nodes.push({name:cl.n,count:pc,group:'client',x:cx+Math.cos(a)*d,y:cy+Math.sin(a)*d,r:r,clickable:true,_action:function(){go(viewClientProj(cl.n,name,pn));}});});
+  var mx=1;clients.forEach(function(c){if(c.c>mx)mx=c.c;});
+  clients.forEach(function(cl,i){var r=20+(cl.c/mx)*46;var a=(i/clients.length)*Math.PI*2-Math.PI/2;var d=95+r+Math.random()*38;nodes.push({name:cl.n,count:cl.c,group:'client',x:cx+Math.cos(a)*d,y:cy+Math.sin(a)*d,r:r,clickable:true,_action:function(){go(viewClientProj(cl.n,name,pn));}});});
   physics(300,true);
   setHdr([{label:'Team',action:function(){go(viewTop());}},{label:pn,action:function(){go(viewPerson(pn));}}],clients.length+' clients');
   legend([[P.client.b,'Client']]);
@@ -346,7 +347,7 @@ function viewIndustry(name,pn){return{view:'industry',render:function(){
 function viewClientProj(cn,fn,pn){return{view:'cp',render:function(){
   var projects=CLIENT_PROJECTS[cn]||[];var cx=W*0.43,cy=H*0.5;
   nodes=[{name:cn,count:null,group:'center',x:cx,y:cy,r:64,clickable:false}];
-  projects.forEach(function(pr,i){var a=(i/Math.max(projects.length,1))*Math.PI*2-Math.PI/2;var r=Math.max(32,26+teamCount(pr)*9);nodes.push({name:pr,count:null,group:'project',x:cx+Math.cos(a)*(80+r),y:cy+Math.sin(a)*(80+r),r:r,clickable:false});});physics(250,true);
+  projects.forEach(function(pr,i){var a=(i/Math.max(projects.length,1))*Math.PI*2-Math.PI/2;nodes.push({name:pr,count:null,group:'project',x:cx+Math.cos(a)*130,y:cy+Math.sin(a)*130,r:44,clickable:false});});physics(250,true);
   var btns=[{label:'Team',action:function(){go(viewTop());}}];if(pn)btns.push({label:pn,action:function(){go(viewPerson(pn));}});if(fn)btns.push({label:fn,action:function(){if(INDUSTRY_CLIENTS[fn])go(viewIndustry(fn,pn));else go(viewSector(fn,null,pn));}});
   setHdr(btns,projects.length+' project'+(projects.length!==1?'s':''));legend([[P.project.b,'Project']]);
   sbFlat(cn,projects.length+' project'+(projects.length!==1?'s':''),projects.map(function(pr){return{n:pr,c:1,g:'project'};}),{hideCount:true});
@@ -355,7 +356,7 @@ function viewClientProj(cn,fn,pn){return{view:'cp',render:function(){
 function viewPE(name,en,pn){return{view:'pe',render:function(){
   var projects=PE_PROJECTS[name]||[];var cx=W*0.43,cy=H*0.5;
   nodes=[{name:name,count:null,group:'center',x:cx,y:cy,r:64,clickable:false}];
-  projects.forEach(function(pr,i){var a=(i/Math.max(projects.length,1))*Math.PI*2-Math.PI/2;var r=Math.max(32,26+teamCount(pr)*9);nodes.push({name:pr,count:null,group:'project',x:cx+Math.cos(a)*(80+r),y:cy+Math.sin(a)*(80+r),r:r,clickable:false});});physics(250,true);
+  projects.forEach(function(pr,i){var a=(i/Math.max(projects.length,1))*Math.PI*2-Math.PI/2;nodes.push({name:pr,count:null,group:'project',x:cx+Math.cos(a)*130,y:cy+Math.sin(a)*130,r:44,clickable:false});});physics(250,true);
   setHdr([{label:'Team',action:function(){go(viewTop());}},{label:pn,action:function(){go(viewPerson(pn));}}],projects.length+' project'+(projects.length!==1?'s':''));legend([[P.project.b,'Project']]);
   sbFlat(name,projects.length+' project'+(projects.length!==1?'s':''),projects.map(function(pr){return{n:pr,c:1,g:'project'};}),{hideCount:true});
 }};}
@@ -363,8 +364,8 @@ function viewPE(name,en,pn){return{view:'pe',render:function(){
 function viewSector(name,en,pn){return{view:'sector',render:function(){
   var clients=SECTOR_CLIENTS[name]||[];var cx=W*0.43,cy=H*0.5;
   nodes=[{name:name,count:null,group:'center',x:cx,y:cy,r:64,clickable:false}];
-  var mx=1;clients.forEach(function(cl){var pc=cpc(cl);if(pc>mx)mx=pc;});
-  clients.forEach(function(cl,i){var pc=cpc(cl);var r=20+(pc/Math.max(mx,1))*42;var a=(i/Math.max(clients.length,1))*Math.PI*2-Math.PI/2;nodes.push({name:cl,count:pc,group:'client',x:cx+Math.cos(a)*(90+r),y:cy+Math.sin(a)*(90+r),r:r,clickable:true,_action:function(){go(viewClientProj(cl,name,pn));}});});physics(250,true);
+  var mx=1;clients.forEach(function(cl){var v=clientVal(cl);if(v>mx)mx=v;});
+  clients.forEach(function(cl,i){var v=clientVal(cl);var r=20+(v/mx)*42;var a=(i/Math.max(clients.length,1))*Math.PI*2-Math.PI/2;nodes.push({name:cl,count:v,group:'client',x:cx+Math.cos(a)*(90+r),y:cy+Math.sin(a)*(90+r),r:r,clickable:true,_action:function(){go(viewClientProj(cl,name,pn));}});});physics(250,true);
   var btns=[{label:'Team',action:function(){go(viewTop());}},{label:pn,action:function(){go(viewPerson(pn));}}];
   setHdr(btns,clients.length+' clients');legend([[P.client.b,'Client']]);
   sbFlat(name,clients.length+' clients',clients.map(function(cl){var pc=cpc(cl);return{n:cl,c:pc,g:'client',suffix:pc===1?'project':'projects',click:function(){go(viewClientProj(cl,name,pn));}};}));
